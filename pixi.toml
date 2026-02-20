@@ -1,0 +1,13 @@
+[workspace]
+authors = ["= <=>"]
+channels = ["conda-forge"]
+name = "UQProject"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+numpy = ">=2.4.2,<3"
+matplotlib = ">=3.10.8,<4"
+scipy = ">=1.17.0,<2"
