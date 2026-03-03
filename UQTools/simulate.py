@@ -63,33 +63,3 @@ def find_block_length(X,Y):
     * Idea 2: use autocorrelation cutoff
     """
     pass
-
-def fit_predict_arima(y_train, X_train=None, h=1, X_test=None, **arima_kwargs):
-    """
-    Fits an ARIMA model to the training data and predicts h steps ahead.
-    
-    Parameters:
-    y_train (np.ndarray): Training target variable of shape (T,) or (T, 1)
-    X_train (np.ndarray, optional): Training covariates of shape (T, d)
-    h (int): Forecasting horizon
-    X_test (np.ndarray, optional): Future covariates for the horizon
-    **arima_kwargs: Additional arguments to pass to the ARIMA model (e.g. order=(p, d, q))
-    
-    Returns:
-    np.ndarray: Predicted values of shape (h,)
-    """
-    if y_train.ndim > 1:
-        y_train = y_train.flatten()
-        
-    model = AutoARIMA(**arima_kwargs)
-    model.fit(y=y_train, X=X_train)
-    
-    pred_kwargs = {'h': h}
-    if X_test is not None:
-        pred_kwargs['X'] = X_test
-        
-    forecasts = model.predict(**pred_kwargs)
-    
-    if isinstance(forecasts, dict) and 'mean' in forecasts:
-        return forecasts['mean']
-    return forecasts
