@@ -125,3 +125,75 @@ def savi_confidence_sequences(y_true, mu_preds_bootstrapped, alpha=0.05):
         
     return L_seq, U_seq
 
+
+class BootstrapSAVI:
+    """
+    Maintains SAVI test-supermartingale for sequential forecasting
+    using empirical predictive distribution and conformal p-values.
+    """
+
+    def __init__(self, alpha=0.05):
+        self.alpha = alpha
+        self.threshold = 1 / alpha
+        self.capital = 1.0
+        self.past_residuals = []
+
+    def _get_predictive_samples(self, bootstrap_forecasts):
+        mean_forecast = np.mean(bootstrap_forecasts)
+        if len(self.past_residuals) < 5:
+            # Fallback if not enough history
+            spread = bootstrap_forecasts - mean_forecast
+            samples = mean_forecast + spread * 2.0
+            return samples
+        else:
+            return mean_forecast + np.array(self.past_residuals)
+
+    def _p_values(self, predictive_samples, candidates):
+        N = len(predictive_samples)
+        sorted_samples = np.sort(predictive_samples)
+        
+        candidates = np.atleast_1d(candidates)
+        pvals = np.zeros(len(candidates))
+        
+        for i, y in enumerate(candidates):
+            F = np.searchsorted(sorted_samples, y, side="right") / float(N)
+            p = 2 * min(F, 1 - F)
+            pvals[i] = max(p, 1.0 / (N + 1))
+            
+        return pvals
+
+    def confidence_interval(self, bootstrap_forecasts):
+        """
+        Return current SAVI confidence interval for the next observation.
+        """
+        pred_samples = self._get_predictive_samples(bootstrap_forecasts)
+        
+        min_s = np.min(pred_samples)
+        max_s = np.max(pred_samples)
+        pad = max(max_s - min_s, 1e-3)
+        candidates = np.linspace(min_s - 1.5*pad, max_s + 1.5*pad, 1000)
+        
+        pvals = self._p_values(pred_samples, candidates)
+        evalues = 1.0 / (2 * np.sqrt(pvals))
+        
+        mask = (self.capital * evalues) < self.threshold
+        
+        if not np.any(mask):
+            return None
+            
+        valid = candidates[mask]
+        return valid.min(), valid.max()
+
+    def update(self, y_true, bootstrap_forecasts):
+        """
+        Update the test-supermartingale using the true observation.
+        """
+        pred_samples = self._get_predictive_samples(bootstrap_forecasts)
+        pvals = self._p_values(pred_samples, [y_true])
+        
+        evalue = 1.0 / (2 * np.sqrt(pvals[0]))
+        self.capital *= evalue
+        self.capital = max(min(self.capital, 1e10), 1e-10) # Prevent overflow/underflow
+        
+        mean_forecast = np.mean(bootstrap_forecasts)
+        self.past_residuals.append(y_true - mean_forecast)

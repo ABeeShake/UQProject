@@ -59,18 +59,39 @@ if __name__ == "__main__":
     L_enb, U_enb = enbpi_confidence_sequences(y_true=Y_test, mu_preds_bootstrapped=bootstrap_forecasts, alpha=alpha)
     mis_enb = np.mean((Y_test < L_enb) | (Y_test > U_enb))
 
+    # 4. Bootstrap SAVI (New)
+    print("  Evaluating BootstrapSAVI...")
+    from UQTools.savi import BootstrapSAVI
+    bs_savi = BootstrapSAVI(alpha=alpha)
+    L_bs = np.zeros(h)
+    U_bs = np.zeros(h)
+    for t in range(h):
+        # Obtain prediction interval *before* seeing the new point Y_test[t]
+        ci = bs_savi.confidence_interval(bootstrap_forecasts[:, t])
+        if ci is not None:
+            L_bs[t], U_bs[t] = ci
+        else:
+            L_bs[t], U_bs[t] = np.inf, -np.inf
+            
+        # Update capital with true point
+        bs_savi.update(Y_test[t], bootstrap_forecasts[:, t])
+            
+    mis_bs = np.mean((Y_test < L_bs) | (Y_test > U_bs))
+
     print(f"\n--- Miscoverage Rates (Target: {alpha}) ---")
     print(f"SAVI:  {mis_savi:.4f}")
     print(f"WSR:   {mis_wsr:.4f}")
     print(f"EnbPI: {mis_enb:.4f}")
+    print(f"BootstrapSAVI: {mis_bs:.4f}")
 
     # Plot
-    fig, axes = plt.subplots(3, 1, figsize=(12, 12), sharex=True)
+    fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
     
     methods = [
         ("SAVI", L_savi, U_savi, mis_savi),
         ("WSR (Variance Betting)", L_wsr, U_wsr, mis_wsr),
-        ("EnbPI (Conformal)", L_enb, U_enb, mis_enb)
+        ("EnbPI (Conformal)", L_enb, U_enb, mis_enb),
+        ("BootstrapSAVI", L_bs, U_bs, mis_bs)
     ]
     
     for idx, (name, L_seq, U_seq, mis_rate) in enumerate(methods):
