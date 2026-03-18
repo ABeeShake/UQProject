@@ -5,7 +5,8 @@ import UQTools.generate as gen
 import UQTools.simulate as sim
 from UQTools.forecasters import fit_predict_regression
 from UQTools.savi import BootstrapSAVI
-from UQTools.savi_variants import BootstrapSAVI_Window, BootstrapSAVI_KDE, BootstrapSAVI_Kelly, BootstrapSAVI_EnbPIHybrid
+from UQTools.savi_variants import BootstrapSAVI_Combined, AdaptiveBettingSAVI, TamedONSSAVI
+from UQTools.enbpi import enbpi_confidence_sequences
 
 def evaluate_method(method, name, bootstrap_forecasts, Y_test, h):
     print(f"  Evaluating {name}...")
@@ -59,14 +60,22 @@ if __name__ == "__main__":
     print("\nRunning Confidence Sequences...")
     
     methods = [
-        ("Base SAVI", BootstrapSAVI(alpha=alpha)),
-        ("Adaptive Window", BootstrapSAVI_Window(alpha=alpha, window=30)),
-        ("KDE Smoothing", BootstrapSAVI_KDE(alpha=alpha)),
-        ("Kelly Betting", BootstrapSAVI_Kelly(alpha=alpha)),
-        ("EnbPI Hybrid", BootstrapSAVI_EnbPIHybrid(alpha=alpha))
+        ("Combined Method", BootstrapSAVI_Combined(alpha=alpha, window=50, gamma=0.5)),
+        ("Adaptive Betting", AdaptiveBettingSAVI(alpha=alpha, window_size=50)),
+        ("Tamed ONS", TamedONSSAVI(alpha=alpha, window_size=50))
     ]
     
     results = []
+    
+    # Run EnbPI benchmark separately because it is function-based
+    print(f"  Evaluating EnbPI...")
+    start_time = time.time()
+    L_seq_enbpi, U_seq_enbpi = enbpi_confidence_sequences(Y_test, bootstrap_forecasts, alpha=alpha)
+    elapsed_enbpi = time.time() - start_time
+    mis_rate_enbpi = np.mean((Y_test < L_seq_enbpi) | (Y_test > U_seq_enbpi))
+    mean_width_enbpi = np.mean(U_seq_enbpi - L_seq_enbpi)
+    print(f"    Miscoverage: {mis_rate_enbpi:.4f} | Avg Width: {mean_width_enbpi:.4f} | Runtime: {elapsed_enbpi:.2f}s")
+    results.append(("EnbPI", L_seq_enbpi, U_seq_enbpi, mis_rate_enbpi, mean_width_enbpi, elapsed_enbpi))
     
     for name, method in methods:
         L_seq, U_seq, mis_rate, mean_width, elapsed = evaluate_method(method, name, bootstrap_forecasts, Y_test, h)
@@ -74,7 +83,7 @@ if __name__ == "__main__":
         
     # Plotting
     mu_preds = np.mean(bootstrap_forecasts, axis=0)
-    fig, axes = plt.subplots(len(methods), 1, figsize=(12, 4*len(methods)), sharex=True)
+    fig, axes = plt.subplots(len(results), 1, figsize=(12, 4*len(results)), sharex=True)
     
     for idx, (name, L_seq, U_seq, mis_rate, mean_width, elapsed) in enumerate(results):
         ax = axes[idx]

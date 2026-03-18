@@ -16,3 +16,6 @@ scikit-learn = ">=1.8.0,<2"
 [pypi-dependencies]
 statsforecast = ">=2.0.1, <3"
 utilsforecast = ">=0.2.15, <0.3"
+
+[activation.env]
+PYTHONPATH = "/Users/abhishek/Documents/SCALE/UQProject"
